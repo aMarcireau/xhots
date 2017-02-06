@@ -1,10 +1,9 @@
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
+#include <WiFiManager.h>
 
 /// parameters
 const unsigned int threshold = 200;
-const char ssid[] = "passage-74";
-const char password[] = "there is no password";
 const IPAddress server(134, 157, 180, 144);
 const IPAddress quanticSwitch(192, 168, 0, 121);
 const int port = 3003;
@@ -14,21 +13,13 @@ bool isOpen = true;
 
 /// setup is called once on startup.
 void setup() {
-
     // define the pin acquiring the signal
     pinMode(A0, INPUT);
 
     // connect to the wifi
     Serial.begin(115200);
-    Serial.print("Attempting connection to the access point ");
-    Serial.println(ssid);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println();
+    WiFiManager wifiManager;
+    wifiManager.autoConnect("xHotsWifi_setup");
     Serial.print("Connected to the access point with ip ");
     Serial.println(WiFi.localIP());
 }
@@ -78,8 +69,6 @@ void loop() {
         }
         Serial.println();
         client.stop();
-
-
 
         // connect to the server
         Serial.print("Attempting connection to the server ");
