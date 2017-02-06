@@ -1,15 +1,34 @@
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
 #include <WiFiManager.h>
+#include <ESP8266httpUpdate.h>
 
 /// parameters
 const unsigned int threshold = 200;
 const IPAddress server(134, 157, 180, 144);
 const IPAddress quanticSwitch(192, 168, 0, 121);
 const int port = 3003;
-
+String serverStr = String(server);
 /// state
 bool isOpen = true;
+
+/// server 
+WiFiServer internalServer(80);
+
+String getHttpRequestParamValue(String input_str, String param) {
+    int param_index = input_str.indexOf(param);
+    if(param_index == -1) {return "\0";}
+    int start_chr = input_str.indexOf("=", param_index + 1) + 1;
+    if(input_str.charAt(param_index + param.length()) == 0x26) {return "NULL";}
+    int end_chr = input_str.indexOf("&", start_chr);
+    return input_str.substring(start_chr, end_chr);
+}
+
+bool checkHttpRequestParam(String input_str, String param) {
+    int param_index = input_str.indexOf(param);
+    if(param_index == -1) {return false;}
+    else {return true;}
+}
 
 /// setup is called once on startup.
 void setup() {
@@ -26,6 +45,41 @@ void setup() {
 
 /// loop is called repeatedly while the chip is on.
 void loop() {
+    // Handle incoming connections
+    WiFiClient client = internalServer.available();
+    if(client) {
+        String rawRequest = client.readStringUntil('\r');
+        String request = rawRequest;
+        request.remove(rawRequest.indexOf("HTTP/1.1"));
+        Serial.println("New Client Request : " + request);
+        IPAddress remote = client.remoteIP();
+        client.flush();
+        // Check method
+        if(checkHttpRequestParam(request, "POST")) {
+            if(checkHttpRequestParam(request, "httpUpdate")) {
+            // Respond to client
+            String binPath = getHttpRequestParamValue(request, "httpUpdate");
+            //Serial.println("httpUpdate toggled, path: " + server + binPath);
+            t_httpUpdate_return ret = ESPhttpUpdate.update(serverStr, port, binPath);
+            delay(1000);
+            switch(ret) {
+                case HTTP_UPDATE_FAILED:
+                    Serial.println("[update] Update failed.");
+                    Serial.println("Error" + String(ESPhttpUpdate.getLastError())  + ESPhttpUpdate.getLastErrorString().c_str());
+                    break;
+                case HTTP_UPDATE_NO_UPDATES:
+                    Serial.println("[update] Update no Update.");
+                    break;
+                }
+            }
+        }
+        if(checkHttpRequestParam(request, "POST")) {
+             // DO SOME STUFF
+        }
+        client.stop(); 
+    }
+
+    // Handle door
     if (isOpen != (analogRead(A0) > threshold)) {
         WiFi.status();
         String url = (isOpen ? "GET /closed/" : "GET /open");
