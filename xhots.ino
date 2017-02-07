@@ -21,13 +21,14 @@ const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
     XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
-    //XhotsServer{"quantic switch", IPAddress(192, 168, 0, 12), 80},
+    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 80},
 };
 const unsigned int internalServerPort = 3000;
 
 /// globals
 const unsigned int numberOfServers = sizeof(servers) / sizeof(XhotsServer);
 WiFiServer internalServer(internalServerPort);
+unsigned long lastBroadcast = 0;
 
 String getHttpRequestParamValue(String input_str, String param) {
     int param_index = input_str.indexOf(param);
@@ -73,42 +74,54 @@ void setup() {
 /// loop is called repeatedly while the chip is on.
 void loop() {
 
-    // manage OTA flash
+    // manage OTA flash and initial pull
     {
         WiFiClient client = internalServer.available();
         if (client) {
             unsigned long now = millis();
             while (client.connected()) {
                 if (millis() - now > serverResponseTimeout) {
-                    client.println("HTTP/1.1 200 OK\r\n");
+                    client.println("HTTP/1.1 422 Unprocessable Entity\r\n");
                     client.stop();
                     break;
                 }
+                bool methodFound = false;
+                bool isPost;
                 if (client.available()) {
                     String requestPart = client.readStringUntil('\n');
-                    if (requestPart.substring(0, 5) == "path=") {
-                        String path = requestPart.substring(5);
-                        Serial.println(String("will reboot using the firmware located at '") + path + "'");
-                        switch(ESPhttpUpdate.update(path)) {
-                            case HTTP_UPDATE_FAILED:
-                                Serial.println(String("http-update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
-                                client.println(
-                                    String("HTTP/1.1 200 http update failed with error '")
-                                    + ESPhttpUpdate.getLastErrorString().c_str()
-                                    + "' ("
-                                    + String(ESPhttpUpdate.getLastError())
-                                    + ")\r\n"
-                                );
+                    if (methodFound) {
+                        methodFound = true;
+                        isPost = (requestPart.substring(0, 4) == "POST");
+                    } else {
+                        if (isPost) {
+                            if (requestPart.substring(0, 5) == "path=") {
+                                String path = requestPart.substring(5);
+                                Serial.println(String("will reboot using the firmware located at '") + path + "'");
+                                switch(ESPhttpUpdate.update(path)) {
+                                    case HTTP_UPDATE_FAILED:
+                                        Serial.println(String("http-update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
+                                        client.println(
+                                            String("HTTP/1.1 200 http update failed with error '")
+                                            + ESPhttpUpdate.getLastErrorString().c_str()
+                                            + "' ("
+                                            + String(ESPhttpUpdate.getLastError())
+                                            + ")\r\n"
+                                        );
+                                        break;
+                                    case HTTP_UPDATE_NO_UPDATES:
+                                        Serial.println("http-update did nothing");
+                                        client.println("HTTP/1.1 200 http-update did nothing\r\n");
+                                        break;
+                                    case HTTP_UPDATE_OK:
+                                        Serial.println("http-update successful\r\n");
+                                        break;
+                                }
                                 break;
-                            case HTTP_UPDATE_NO_UPDATES:
-                                Serial.println("http-update did nothing");
-                                client.println(String("HTTP/1.1 200 http-update did nothing"));
-                                break;
-                            case HTTP_UPDATE_OK:
-                                Serial.println("http-update successful");
-                                break;
+                            }
+                        } else {
+                            client.println(String("HTTP/1.1 200 ") + (analogRead(A0) > analogReadThreshold ? "open" : "closed") + "\r\n");
+                            break;
                         }
-                        client.stop();
                     }
                 }
             }
@@ -121,24 +134,22 @@ void loop() {
         String status = String("status=") + (isOpen ? "open" : "closed");
 
         // send a post request to each server
-        {
-            for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
-                XhotsServer& server = servers[serverIndex];
-                if (server.isOpen != isOpen) {
-                    server.isConnected = server.client.connect(server.ip, server.port);
-                    if (server.isConnected) {
-                        server.client.setNoDelay(true);
-                        server.client.println("POST /update HTTP/1.1");
-                        server.client.println(String("Host: ") + server.ip.toString() + ":" + String(server.port));
-                        server.client.println("Connection: close");
-                        server.client.println("Content-Type: application/x-www-form-urlencoded");
-                        server.client.println(String("Content-Length: ") + String(status.length()));
-                        server.client.println();
-                        server.client.println(status);
-                        Serial.println(String("sent '") + status + "' to '" + server.name + "'");
-                    } else {
-                        Serial.println(String("connection to '") + server.name + "' failed");
-                    }
+        for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
+            XhotsServer& server = servers[serverIndex];
+            if (server.isOpen != isOpen) {
+                server.isConnected = server.client.connect(server.ip, server.port);
+                if (server.isConnected) {
+                    server.client.setNoDelay(true);
+                    server.client.println("POST /update HTTP/1.1");
+                    server.client.println(String("Host: ") + server.ip.toString() + ":" + String(server.port));
+                    server.client.println("Connection: close");
+                    server.client.println("Content-Type: application/x-www-form-urlencoded");
+                    server.client.println(String("Content-Length: ") + String(status.length()));
+                    server.client.println();
+                    server.client.println(status);
+                    Serial.println(String("sent '") + status + "' to '" + server.name + "'");
+                } else {
+                    Serial.println(String("connection to '") + server.name + "' failed");
                 }
             }
         }
