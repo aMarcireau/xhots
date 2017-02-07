@@ -23,10 +23,11 @@ XhotsServer servers[] = {
     XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
     //XhotsServer{"quantic switch", IPAddress(192, 168, 0, 12), 80},
 };
+const unsigned int internalServerPort = 3000;
 
 /// globals
 const unsigned int numberOfServers = sizeof(servers) / sizeof(XhotsServer);
-WiFiServer internalServer(80);
+WiFiServer internalServer(internalServerPort);
 
 String getHttpRequestParamValue(String input_str, String param) {
     int param_index = input_str.indexOf(param);
@@ -53,7 +54,7 @@ void setup() {
     Serial.begin(115200);
     WiFiManager wifiManager;
     wifiManager.autoConnect("xHotsWifi_setup");
-    Serial.print("Connected to the access point with ip ");
+    Serial.print("connected to the access point with ip ");
     Serial.println(WiFi.localIP());
 
     // set the clients' defaults
@@ -62,6 +63,11 @@ void setup() {
         server.isConnected = false;
         server.isOpen = true;
     }
+
+    // start the internal server
+    internalServer.begin();
+    internalServer.setNoDelay(true);
+    Serial.println(String("internal server listening on port ") + String(internalServerPort));
 }
 
 /// loop is called repeatedly while the chip is on.
@@ -71,41 +77,37 @@ void loop() {
     {
         WiFiClient client = internalServer.available();
         if (client) {
-            Serial.println("request received: " + client.readStringUntil('\r'));
-            /*
-            String rawRequest = client.readStringUntil('\r');
-            String request = rawRequest;
-            request.remove(rawRequest.indexOf("HTTP/1.1"));
-            Serial.println("New Client Request : " + request);
-            IPAddress remote = client.remoteIP();
-            client.flush();
-            // Check method
-            if(checkHttpRequestParam(request, "POST")) {
-                if(checkHttpRequestParam(request, "httpUpdate")) {
-                // Respond to client
-                String binPath = getHttpRequestParamValue(request, "httpUpdate");
-                //Serial.println("httpUpdate toggled, path: " + server + binPath);
-                t_httpUpdate_return ret = ESPhttpUpdate.update(String(servers[0].ip), servers[0].port, binPath);
-                delay(1000);
-                switch(ret) {
-                    case HTTP_UPDATE_FAILED:
-                        Serial.println("[update] Update failed.");
-                        Serial.println("Error" + String(ESPhttpUpdate.getLastError())  + ESPhttpUpdate.getLastErrorString().c_str());
-                        break;
-                    case HTTP_UPDATE_NO_UPDATES:
-                        Serial.println("[update] Update no Update.");
-                        break;
+            unsigned long now = millis();
+            while (client.connected()) {
+                if (millis() - now > serverResponseTimeout) {
+                    client.println("HTTP/1.1 200 OK\r\n");
+                    client.stop();
+                    break;
+                }
+                if (client.available()) {
+                    String requestPart = client.readStringUntil('\n');
+                    if (requestPart.substring(0, 5) == "path=") {
+                        String path = requestPart.substring(5);
+                        client.println("HTTP/1.1 200 OK\r\n");
+                        client.stop();
+                        Serial.println(String("will reboot using the firmware located at '") + path + "'");
+                        switch(ESPhttpUpdate.update(path)) {
+                            case HTTP_UPDATE_FAILED:
+                                Serial.println(String("http update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
+                                break;
+                            case HTTP_UPDATE_NO_UPDATES:
+                                Serial.println("http-update did nothing");
+                                break;
+                            case HTTP_UPDATE_OK:
+                                Serial.println("http-update successful");
+                                break;
+                        }
                     }
                 }
             }
-            if(checkHttpRequestParam(request, "POST")) {
-                 // DO SOME STUFF
-            }
-            client.stop();
-            */
         }
-
     }
+
     // manage the door
     {
         bool isOpen = analogRead(A0) > analogReadThreshold;
