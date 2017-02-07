@@ -88,20 +88,27 @@ void loop() {
                     String requestPart = client.readStringUntil('\n');
                     if (requestPart.substring(0, 5) == "path=") {
                         String path = requestPart.substring(5);
-                        client.println("HTTP/1.1 200 OK\r\n");
-                        client.stop();
                         Serial.println(String("will reboot using the firmware located at '") + path + "'");
                         switch(ESPhttpUpdate.update(path)) {
                             case HTTP_UPDATE_FAILED:
-                                Serial.println(String("http update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
+                                Serial.println(String("http-update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
+                                client.println(
+                                    String("HTTP/1.1 200 http update failed with error '")
+                                    + ESPhttpUpdate.getLastErrorString().c_str()
+                                    + "' ("
+                                    + String(ESPhttpUpdate.getLastError())
+                                    + ")\r\n"
+                                );
                                 break;
                             case HTTP_UPDATE_NO_UPDATES:
                                 Serial.println("http-update did nothing");
+                                client.println(String("HTTP/1.1 200 http-update did nothing"));
                                 break;
                             case HTTP_UPDATE_OK:
                                 Serial.println("http-update successful");
                                 break;
                         }
+                        client.stop();
                     }
                 }
             }
