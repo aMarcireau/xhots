@@ -1,7 +1,7 @@
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
+#include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
-#include <OneWire.h>
 #include <WiFiManager.h>
 #include <ESP8266httpUpdate.h>
 
@@ -18,15 +18,14 @@ struct XhotsServer {
 /// parameters
 const unsigned int analogReadThreshold = 200;
 const unsigned int serverResponseTimeout = 3000; // milliseconds
+const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
     XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
-    XhotsServer{"quantic switch", IPAddress(192, 168, 0, 12), 80},
+    //XhotsServer{"quantic switch", IPAddress(192, 168, 0, 12), 80},
 };
 
-/// constants
-const unsigned int numberOfServers = sizeof(servers) / sizeof(Server);
-
-/// server
+/// globals
+const unsigned int numberOfServers = sizeof(servers) / sizeof(XhotsServer);
 WiFiServer internalServer(80);
 
 String getHttpRequestParamValue(String input_str, String param) {
@@ -46,6 +45,7 @@ bool checkHttpRequestParam(String input_str, String param) {
 
 /// setup is called once on startup.
 void setup() {
+
     // define the pin acquiring the signal
     pinMode(A0, INPUT);
 
@@ -61,119 +61,117 @@ void setup() {
         XhotsServer& server = servers[serverIndex];
         server.isConnected = false;
         server.isOpen = true;
-        server.client.setNoDelay(true);
     }
 }
 
 /// loop is called repeatedly while the chip is on.
 void loop() {
 
-    // Handle incoming connections
-    WiFiClient client = internalServer.available();
-    if(client) {
-        String rawRequest = client.readStringUntil('\r');
-        String request = rawRequest;
-        request.remove(rawRequest.indexOf("HTTP/1.1"));
-        Serial.println("New Client Request : " + request);
-        IPAddress remote = client.remoteIP();
-        client.flush();
-        // Check method
-        if(checkHttpRequestParam(request, "POST")) {
-            if(checkHttpRequestParam(request, "httpUpdate")) {
-            // Respond to client
-            String binPath = getHttpRequestParamValue(request, "httpUpdate");
-            //Serial.println("httpUpdate toggled, path: " + server + binPath);
-            t_httpUpdate_return ret = ESPhttpUpdate.update(serverStr, port, binPath);
-            delay(1000);
-            switch(ret) {
-                case HTTP_UPDATE_FAILED:
-                    Serial.println("[update] Update failed.");
-                    Serial.println("Error" + String(ESPhttpUpdate.getLastError())  + ESPhttpUpdate.getLastErrorString().c_str());
-                    break;
-                case HTTP_UPDATE_NO_UPDATES:
-                    Serial.println("[update] Update no Update.");
-                    break;
+    // manage OTA flash
+    {
+        WiFiClient client = internalServer.available();
+        if (client) {
+            Serial.println("request received: " + client.readStringUntil('\r'));
+            /*
+            String rawRequest = client.readStringUntil('\r');
+            String request = rawRequest;
+            request.remove(rawRequest.indexOf("HTTP/1.1"));
+            Serial.println("New Client Request : " + request);
+            IPAddress remote = client.remoteIP();
+            client.flush();
+            // Check method
+            if(checkHttpRequestParam(request, "POST")) {
+                if(checkHttpRequestParam(request, "httpUpdate")) {
+                // Respond to client
+                String binPath = getHttpRequestParamValue(request, "httpUpdate");
+                //Serial.println("httpUpdate toggled, path: " + server + binPath);
+                t_httpUpdate_return ret = ESPhttpUpdate.update(String(servers[0].ip), servers[0].port, binPath);
+                delay(1000);
+                switch(ret) {
+                    case HTTP_UPDATE_FAILED:
+                        Serial.println("[update] Update failed.");
+                        Serial.println("Error" + String(ESPhttpUpdate.getLastError())  + ESPhttpUpdate.getLastErrorString().c_str());
+                        break;
+                    case HTTP_UPDATE_NO_UPDATES:
+                        Serial.println("[update] Update no Update.");
+                        break;
+                    }
                 }
             }
-        }
-        if(checkHttpRequestParam(request, "POST")) {
-             // DO SOME STUFF
-        }
-        client.stop();
-    }
-
-    // Handle door
-    if (isOpen != (analogRead(A0) > threshold)) {
-        WiFi.status();
-        String url = (isOpen ? "GET /closed/" : "GET /open");
-        // connect to the quanticSwitch
-        Serial.print("Attempting connection to quanticSwitch ");
-        Serial.print(quanticSwitch);
-        Serial.print(":");
-        Serial.print("80");
-        Serial.print(" - ");
-        WiFiClient client;
-        client.stop();
-        if (!client.connect(quanticSwitch, 80)) {
-            Serial.println("connection failed");
-            delay(500);
-            return;
-        }
-        Serial.println("connected");
-
-    // send a post request to each server
-    for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
-        XhotsServer& server = servers[serverIndex];
-        if (server.isOpen != isOpen) {
-            server.isConnected = server.client.connect(server.ip, server.port);
-            if (server.isConnected) {
-                server.client.println("POST /update HTTP/1.1");
-                server.client.println(String("Host: ") + server.ip.toString());
-                server.client.println("Content-Length: " + status.length());
-                server.client.println("Content-Type: application/x-www-form-urlencoded");
-                server.client.println();
-                server.client.println(status);
-                Serial.print(String("sent '") + status + "' to '" + server.name);
-            } else {
-                Serial.print(String("connection to '") + server.name + "' failed");
+            if(checkHttpRequestParam(request, "POST")) {
+                 // DO SOME STUFF
             }
+            client.stop();
+            */
         }
-    }
 
-    // read responses from the servers
-    unsigned long now = millis();
-    for (;;) {
-        if (millis() - now > serverResponseTimeout) {
+    }
+    // manage the door
+    {
+        bool isOpen = analogRead(A0) > analogReadThreshold;
+        String status = String("status=") + (isOpen ? "open" : "closed");
+
+        // send a post request to each server
+        {
             for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
                 XhotsServer& server = servers[serverIndex];
-                if (server.isOpen != isOpen && server.isConnected) {
-                    Serial.print(String("'") + server.name + "' timed out");
+                if (server.isOpen != isOpen) {
+                    server.isConnected = server.client.connect(server.ip, server.port);
+                    if (server.isConnected) {
+                        server.client.setNoDelay(true);
+                        server.client.println("POST /update HTTP/1.1");
+                        server.client.println(String("Host: ") + server.ip.toString() + ":" + String(server.port));
+                        server.client.println("Connection: close");
+                        server.client.println("Content-Type: application/x-www-form-urlencoded");
+                        server.client.println(String("Content-Length: ") + String(status.length()));
+                        server.client.println();
+                        server.client.println(status);
+                        Serial.println(String("sent '") + status + "' to '" + server.name + "'");
+                    } else {
+                        Serial.println(String("connection to '") + server.name + "' failed");
+                    }
                 }
             }
-            break;
         }
-        bool eachServerAnswered = true;
+
+        // read responses from the servers
+        {
+            unsigned long now = millis();
+            for (;;) {
+                if (millis() - now > serverResponseTimeout) {
+                    for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
+                        XhotsServer& server = servers[serverIndex];
+                        if (server.isOpen != isOpen && server.isConnected) {
+                            Serial.println(String("'") + server.name + "' timed out");
+                        }
+                    }
+                    break;
+                }
+                bool eachServerAnswered = true;
+                for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
+                    XhotsServer& server = servers[serverIndex];
+                    if (server.isOpen != isOpen && server.isConnected) {
+                        if (server.client.connected()) {
+                            eachServerAnswered = false;
+                            if (server.client.available() > 0) {
+                                Serial.println(String("reponse line from '") + server.name + "': '" + server.client.readStringUntil('\r') + "'");
+                            }
+                        } else {
+                            server.isOpen = isOpen;
+                        }
+                    }
+                }
+                if (eachServerAnswered) {
+                    delay(sensorDebounce);
+                    break;
+                }
+            }
+        }
+
+        // disconnect all the clients
         for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
             XhotsServer& server = servers[serverIndex];
-            if (server.isOpen != isOpen && server.isConnected) {
-                if (server.client.connected()) {
-                    eachServerAnswered = false;
-                    if (server.client.available() > 0) {
-                        Serial.println(String("reponse line from '") + server.name + "': '" + server.client.readStringUntil('\r') + "'");
-                    }
-                } else {
-                    server.isOpen = isOpen;
-                }
-            }
+            server.client.stop();
         }
-        if (eachServerAnswered) {
-            break;
-        }
-    }
-
-    // disconnect all the clients
-    for (unsigned int serverIndex = 0; serverIndex < numberOfServers; ++serverIndex) {
-        XhotsServer& server = servers[serverIndex];
-        server.client.stop();
     }
 }
