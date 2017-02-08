@@ -21,29 +21,13 @@ const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
     XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
-    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 80},
+    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 3001},
 };
 const unsigned int internalServerPort = 3000;
 
 /// globals
 const unsigned int numberOfServers = sizeof(servers) / sizeof(XhotsServer);
 WiFiServer internalServer(internalServerPort);
-unsigned long lastBroadcast = 0;
-
-String getHttpRequestParamValue(String input_str, String param) {
-    int param_index = input_str.indexOf(param);
-    if(param_index == -1) {return "\0";}
-    int start_chr = input_str.indexOf("=", param_index + 1) + 1;
-    if(input_str.charAt(param_index + param.length()) == 0x26) {return "NULL";}
-    int end_chr = input_str.indexOf("&", start_chr);
-    return input_str.substring(start_chr, end_chr);
-}
-
-bool checkHttpRequestParam(String input_str, String param) {
-    int param_index = input_str.indexOf(param);
-    if(param_index == -1) {return false;}
-    else {return true;}
-}
 
 /// setup is called once on startup.
 void setup() {
@@ -74,7 +58,7 @@ void setup() {
 /// loop is called repeatedly while the chip is on.
 void loop() {
 
-    // manage OTA flash and initial pull
+    // manage the internal server
     {
         WiFiClient client = internalServer.available();
         if (client) {
