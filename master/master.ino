@@ -63,21 +63,24 @@ void loop() {
         WiFiClient client = internalServer.available();
         if (client) {
             unsigned long now = millis();
+            bool methodFound = false;
+            bool isPost;
             while (client.connected()) {
                 if (millis() - now > serverResponseTimeout) {
                     client.println("HTTP/1.1 422 Unprocessable Entity\r\n");
                     client.stop();
                     break;
                 }
-                bool methodFound = false;
-                bool isPost;
                 if (client.available()) {
                     String requestPart = client.readStringUntil('\n');
-                    if (methodFound) {
+                    Serial.println("received request part '" + requestPart + "'");
+                    if (!methodFound) {
                         methodFound = true;
                         isPost = (requestPart.substring(0, 4) == "POST");
+						Serial.println("received request part substring is '" + requestPart.substring(0, 5) + "', it " + (isPost ? "is a post" : "is not a post"));
                     } else {
                         if (isPost) {
+                            Serial.println("received request part substring is '" + requestPart.substring(0, 5) + "'");
                             if (requestPart.substring(0, 5) == "path=") {
                                 String path = requestPart.substring(5);
                                 Serial.println(String("will reboot using the firmware located at '") + path + "'");
