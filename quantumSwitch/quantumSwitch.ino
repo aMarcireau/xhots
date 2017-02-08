@@ -15,6 +15,7 @@ Adafruit_NeoPixel strip_l = Adafruit_NeoPixel(12, L_STRAND_PIN, NEO_GRB + NEO_KH
 
 WiFiServer server(80);
 bool state = true;
+unsigned int serverResponseTimeout = 5000;
 
 // Fill the dots one after the other with a color
 void setHighColor(uint32_t c, uint8_t wait) {
@@ -70,13 +71,13 @@ void setup() {
   } while(!client.connect(serverIP, port));
   client.println("GET /status/ HTTP/1.1");
   client.println(String("Host: ") + serverIP);
-  client.println("Connection: keep-alive");
+  client.println("Connection: close");
   client.println();
       
   // wait for response
   unsigned long now = millis();
   while (client.available() == 0) {
-    if (millis() - now > 3) {
+    if (millis() - now > 5000) {
       Serial.println("timeout");
       client.stop();
       return;
@@ -102,25 +103,30 @@ void setup() {
 }
 
 void loop() {
-   WiFiClient client = server.available();
-   if (client) {
-     String rawRequest = client.readStringUntil('\r');
-     String request = rawRequest;
-
-     // respond to Xiots
-     client.println("HTTP/1.1 200 OK");
-     client.println();
-     client.println();
-     client.stop();
-     request.remove(rawRequest.indexOf("HTTP/1.1"));
-     Serial.println("New Client Request : " + request);
-     
-     if(request.indexOf("open") != -1){
-       setLightSignal(false);
-     }
-     if(request.indexOf("closed") != -1){
-       setLightSignal(true);
-     }
-   }
-   delay(1);
-}
+    WiFiClient client = server.available();
+    if (client) {
+		unsigned long now = millis();
+		while (client.connected()) {
+			if (millis() - now > serverResponseTimeout) {
+				client.println("HTTP/1.1 200 OK\r\n");
+			    client.stop();
+			    break;
+			}
+			if(client.available()){
+				String requestPart = client.readStringUntil('\n');
+				if(requestPart.indexOf("closed") != -1) {
+					setLightSignal(true);
+					Serial.println("Just got trigger from master --> close");
+					break;
+				}
+				if(requestPart.indexOf("open") != -1) {
+					setLightSignal(false);
+					Serial.println("Just got trigger from master --> open");
+					break;
+				}
+			}
+		}
+		client.println("HTTP/1.1 200 OK \n\r");
+		client.stop();
+	}
+}   	   
