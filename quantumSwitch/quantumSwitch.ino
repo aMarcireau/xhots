@@ -1,16 +1,19 @@
 #include <Adafruit_NeoPixel.h>
-#ifdef __AVR__
-  #include <avr/power.h>
-#endif
+#include <ESP8266WiFi.h>
+#include <DNSServer.h>
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
 #include <WiFiManager.h>
+#include <ESP8266httpUpdate.h>
 
 /// parameters
 const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int masterConnectionRetryPeriod = 1000; // milliseconds
-const IPAddress masterIpAddress(192, 168, 0, 11);
+IPAddress masterIpAddress(192, 168, 0, 11);
 const int masterPort = 3000;
 const int animationDuration = 1000; // milliseconds
 const int animationFrameDuration = 20; // milliseconds
+const unsigned int internalServerPort = 3001;
 
 /// globals
 Adafruit_NeoPixel topStrip = Adafruit_NeoPixel(12, D1);
@@ -56,7 +59,7 @@ void setup() {
         WiFiClient client;
         for (;;) {
             if (client.connect(masterIpAddress, masterPort)) {
-                Serial.println('connected to master, sending a request to get the current door state');
+                Serial.println("connected to master, sending a request to get the current door state");
                 client.println("GET / HTTP/1.1");
                 client.println(String("Host: ") + masterIpAddress.toString() + ":" + String(masterPort));
                 client.println("Connection: close");
@@ -83,7 +86,7 @@ void setup() {
                     }
                 }
             } else {
-                Serial.println('connection to master failed');
+                Serial.println("connection to master failed");
                 delay(masterConnectionRetryPeriod);
             }
         }
@@ -107,6 +110,7 @@ void loop() {
                 if (requestPart.substring(0, 7) == "status=") {
                     if (isOpen != !(requestPart.substring(7) == "closed")) {
                         isOpen = !isOpen;
+                        Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
                         for (unsigned int frameIndex = 0; frameIndex <= animationDuration / animationFrameDuration; ++frameIndex) {
                             float progress = (float)frameIndex / (animationDuration / animationFrameDuration);
                             if (progress < 0.5) {
