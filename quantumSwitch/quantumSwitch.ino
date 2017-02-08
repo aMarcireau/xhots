@@ -9,7 +9,7 @@
 /// parameters
 const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int masterConnectionRetryPeriod = 1000; // milliseconds
-IPAddress masterIpAddress(192, 168, 0, 11);
+IPAddress masterIpAddress(192, 168, 0, 105);
 const int masterPort = 3000;
 const int animationDuration = 1000; // milliseconds
 const int animationFrameDuration = 20; // milliseconds
@@ -18,11 +18,11 @@ const unsigned int internalServerPort = 3001;
 /// globals
 Adafruit_NeoPixel topStrip = Adafruit_NeoPixel(12, D1);
 Adafruit_NeoPixel bottomStrip = Adafruit_NeoPixel(12, D2);
-WiFiServer internalServer(3001);
+WiFiServer internalServer(internalServerPort);
 bool isOpen = true;
 
 /// fill sets the color of each LED on each strip.
-void fill(unsigned char r, unsigned char  g, unsigned char  b) {
+void fill(unsigned char r, unsigned char g, unsigned char b) {
     {
         uint32_t color = topStrip.Color(r, g, b);
         for(uint16_t ledIndex = 0; ledIndex < topStrip.numPixels(); ++ledIndex) {
@@ -35,12 +35,22 @@ void fill(unsigned char r, unsigned char  g, unsigned char  b) {
             bottomStrip.setPixelColor(ledIndex, color);
         }
     }
-    topStrip.show();
-    bottomStrip.show();
+	topStrip.show();
+	bottomStrip.show();
 }
 
 /// setup is called once on startup.
 void setup() {
+
+    // initialise LED strips
+    topStrip.begin();
+    bottomStrip.begin();
+    topStrip.setBrightness(255);
+    bottomStrip.setBrightness(255);
+    topStrip.show();
+    bottomStrip.show();
+    fill(0, 0, 255);
+    delay(animationFrameDuration);
 
     // connect to the wifi
     Serial.begin(115200);
@@ -68,12 +78,16 @@ void setup() {
                 unsigned long now = millis();
                 while (client.connected()) {
                     if (millis() - now > serverResponseTimeout) {
+                        Serial.println("request to master timeout");
                         break;
                     }
                     if (client.available() > 0) {
-                        isOpen = !(client.readStringUntil('\r').substring(13) == "closed");
+                        String response = client.readStringUntil('\r');
+						Serial.println("master response: '" + response + "'");
+                        isOpen = !(response.substring(13) == "closed");
+						Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
                         if (isOpen) {
-                            fill(0, 255, 0);
+							fill(0, 255, 0);
                         } else {
                             fill(255, 0, 0);
                         }
@@ -81,16 +95,15 @@ void setup() {
                         stateSet = true;
                         break;
                     }
-                    if (stateSet) {
-                        break;
-                    }
+                }
+                if (stateSet) {
+                    break;
                 }
             } else {
                 Serial.println("connection to master failed");
                 delay(masterConnectionRetryPeriod);
             }
         }
-
     }
 }
 
@@ -98,6 +111,9 @@ void setup() {
 void loop() {
     WiFiClient client = internalServer.available();
     if (client) {
+		
+		Serial.println("received something!"); // @DEBUG
+		
         unsigned long now = millis();
         while (client.connected()) {
             if (millis() - now > serverResponseTimeout) {
@@ -107,7 +123,10 @@ void loop() {
             }
             if (client.available()) {
                 String requestPart = client.readStringUntil('\n');
-                if (requestPart.substring(0, 7) == "status=") {
+				
+				Serial.println(String("received request part: [[[") + requestPart + "]]]"); // @DEBUG
+                
+				if (requestPart.substring(0, 7) == "status=") {
                     if (isOpen != !(requestPart.substring(7) == "closed")) {
                         isOpen = !isOpen;
                         Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
@@ -129,6 +148,7 @@ void loop() {
                             delay(animationFrameDuration);
                         }
                     }
+					break;
                 } else if (requestPart.substring(0, 5) == "path=") {
                     String path = requestPart.substring(5);
                     Serial.println(String("will reboot using the firmware located at '") + path + "'");
