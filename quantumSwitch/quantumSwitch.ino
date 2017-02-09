@@ -52,8 +52,10 @@ void setup() {
     fill(0, 0, 255);
     delay(animationFrameDuration);
 
-    // connect to the wifi
+    // start the serial connection for debug
     Serial.begin(115200);
+
+    // connect to the wifi
     WiFiManager wifiManager;
     wifiManager.autoConnect("xHotsWifi_setup");
     Serial.print("connected to the access point with ip ");
@@ -111,9 +113,9 @@ void setup() {
 void loop() {
     WiFiClient client = internalServer.available();
     if (client) {
-		
+
 		Serial.println("received something!"); // @DEBUG
-		
+
         unsigned long now = millis();
         while (client.connected()) {
             if (millis() - now > serverResponseTimeout) {
@@ -123,10 +125,11 @@ void loop() {
             }
             if (client.available()) {
                 String requestPart = client.readStringUntil('\n');
-				
+
 				Serial.println(String("received request part: [[[") + requestPart + "]]]"); // @DEBUG
-                
+
 				if (requestPart.substring(0, 7) == "status=") {
+                    client.println("HTTP/1.1 200 OK\r\n");
                     if (isOpen != !(requestPart.substring(7) == "closed")) {
                         isOpen = !isOpen;
                         Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
@@ -156,7 +159,7 @@ void loop() {
                         case HTTP_UPDATE_FAILED:
                             Serial.println(String("http-update failed with error '") + ESPhttpUpdate.getLastErrorString().c_str() + "' (" + String(ESPhttpUpdate.getLastError()) + ")");
                             client.println(
-                                String("HTTP/1.1 200 http update failed with error '")
+                                String("HTTP/1.1 500 http update failed with error '")
                                 + ESPhttpUpdate.getLastErrorString().c_str()
                                 + "' ("
                                 + String(ESPhttpUpdate.getLastError())
@@ -165,7 +168,7 @@ void loop() {
                             break;
                         case HTTP_UPDATE_NO_UPDATES:
                             Serial.println("http-update did nothing");
-                            client.println("HTTP/1.1 200 http-update did nothing\r\n");
+                            client.println("HTTP/1.1 500 http-update did nothing\r\n");
                             break;
                         case HTTP_UPDATE_OK:
                             Serial.println("http-update successful\r\n");

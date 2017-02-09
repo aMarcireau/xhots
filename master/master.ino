@@ -35,8 +35,10 @@ void setup() {
     // define the pin acquiring the signal
     pinMode(A0, INPUT);
 
-    // connect to the wifi
+    // start the serial connection for debug
     Serial.begin(115200);
+
+    // connect to the wifi
     WiFiManager wifiManager;
     wifiManager.autoConnect("xHotsWifi_setup");
     Serial.print("connected to the access point with ip ");
