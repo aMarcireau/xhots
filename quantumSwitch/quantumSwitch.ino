@@ -113,9 +113,6 @@ void setup() {
 void loop() {
     WiFiClient client = internalServer.available();
     if (client) {
-
-		Serial.println("received something!"); // @DEBUG
-
         unsigned long now = millis();
         while (client.connected()) {
             if (millis() - now > serverResponseTimeout) {
@@ -125,12 +122,9 @@ void loop() {
             }
             if (client.available()) {
                 String requestPart = client.readStringUntil('\n');
-
-				Serial.println(String("received request part: [[[") + requestPart + "]]]"); // @DEBUG
-
 				if (requestPart.substring(0, 7) == "status=") {
                     client.println("HTTP/1.1 200 OK\r\n");
-                    if (isOpen != !(requestPart.substring(7) == "closed")) {
+                    if (isOpen == (requestPart.substring(7, 13) == "closed")) {
                         isOpen = !isOpen;
                         Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
                         for (unsigned int frameIndex = 0; frameIndex <= animationDuration / animationFrameDuration; ++frameIndex) {
