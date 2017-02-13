@@ -21,7 +21,7 @@ const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
     XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
-    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 3001},
+    XhotsServer{"quantum switch", IPAddress(134, 157, 180, 175), 3001},
 };
 const unsigned int internalServerPort = 3000;
 

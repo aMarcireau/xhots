@@ -9,7 +9,7 @@
 /// parameters
 const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int masterConnectionRetryPeriod = 1000; // milliseconds
-IPAddress masterIpAddress(192, 168, 0, 105);
+IPAddress masterIpAddress(134, 157, 180, 174);
 const int masterPort = 3000;
 const int animationDuration = 1000; // milliseconds
 const int animationFrameDuration = 20; // milliseconds
