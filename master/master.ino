@@ -20,8 +20,8 @@ const unsigned int analogReadThreshold = 200;
 const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
-    XhotsServer{"macmini", IPAddress(134, 157, 180, 144), 3003},
-    XhotsServer{"quantum switch", IPAddress(134, 157, 180, 175), 3001},
+    XhotsServer{"macmini", IPAddress(134, 157, 180, 96), 80},
+    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 3001},
 };
 const unsigned int internalServerPort = 3000;
 
@@ -129,7 +129,7 @@ void loop() {
                 server.isConnected = server.client.connect(server.ip, server.port);
                 if (server.isConnected) {
                     server.client.setNoDelay(true);
-                    server.client.println("POST /update HTTP/1.1");
+                    server.client.println("POST /xhots/update HTTP/1.1");
                     server.client.println(String("Host: ") + server.ip.toString() + ":" + String(server.port));
                     server.client.println("Connection: close");
                     server.client.println("Content-Type: application/x-www-form-urlencoded");
