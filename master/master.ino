@@ -20,8 +20,8 @@ const unsigned int analogReadThreshold = 200;
 const unsigned int serverResponseTimeout = 3000; // milliseconds
 const unsigned int sensorDebounce = 500; // milliseconds
 XhotsServer servers[] = {
-    XhotsServer{"macmini", IPAddress(134, 157, 180, 96), 80},
-    XhotsServer{"quantum switch", IPAddress(192, 168, 0, 106), 3001},
+    XhotsServer{"frontend", IPAddress(134, 157, 180, 96), 80},
+    XhotsServer{"quantum switch", IPAddress(134, 157, 180, 175), 3001},
 };
 const unsigned int internalServerPort = 3000;
 
@@ -79,7 +79,7 @@ void loop() {
                     if (!methodFound) {
                         methodFound = true;
                         isPost = (requestPart.substring(0, 4) == "POST");
-						Serial.println("received request part substring is '" + requestPart.substring(0, 5) + "', it " + (isPost ? "is a post" : "is not a post"));
+						            Serial.println("received request part substring is '" + requestPart.substring(0, 5) + "', it " + (isPost ? "is a post" : "is not a post"));
                     } else {
                         if (isPost) {
                             Serial.println("received request part substring is '" + requestPart.substring(0, 5) + "'");

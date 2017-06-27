@@ -51,20 +51,20 @@ void fill(unsigned char r, unsigned char g, unsigned char b) {
 time_t getNtpTime() {
     IPAddress ntpServerIP; // NTP server's ip address
 
-    while (Udp.parsePacket() > 0) {} // discard any previously received packets
+    while (udp.parsePacket() > 0) {} // discard any previously received packets
     Serial.println("Transmit NTP Request");
 
     WiFi.hostByName(ntpServerName, ntpServerIP);
     Serial.print(ntpServerName);
     Serial.print(": ");
     Serial.println(ntpServerIP);
-    sendNTPpacket(ntpServerIP);
+    sendNtpPacket(ntpServerIP);
     uint32_t beginWait = millis();
     while (millis() - beginWait < 1500) {
-        int size = Udp.parsePacket();
+        int size = udp.parsePacket();
         if (size >= NTP_PACKET_SIZE) {
             Serial.println("Receive NTP Response");
-            Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
+            udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
             unsigned long secsSince1900;
             // convert four bytes starting at location 40 to a long integer
             secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
@@ -95,9 +95,9 @@ void sendNtpPacket(IPAddress& address) {
     packetBuffer[15] = 52;
     // all NTP fields have been given values, now
     // you can send a packet requesting a timestamp:
-    Udp.beginPacket(address, 123); //NTP requests are to port 123
-    Udp.write(packetBuffer, NTP_PACKET_SIZE);
-    Udp.endPacket();
+    udp.beginPacket(address, 123); //NTP requests are to port 123
+    udp.write(packetBuffer, NTP_PACKET_SIZE);
+    udp.endPacket();
 }
 
 /// printDigits is used by digitalClockDisplay.
@@ -153,9 +153,9 @@ void setup() {
 
     // Start UDP service to receive NTP packets
     Serial.println("Starting UDP");
-    Udp.begin(localPort);
+    udp.begin(localPort);
     Serial.print("Local port: ");
-    Serial.println(Udp.localPort());
+    Serial.println(udp.localPort());
     Serial.println("waiting for sync");
     setSyncProvider(getNtpTime);
     setSyncInterval(3600);
@@ -179,11 +179,11 @@ void setup() {
                     }
                     if (client.available() > 0) {
                         String response = client.readStringUntil('\r');
-						Serial.println("master response: '" + response + "'");
+						            Serial.println("master response: '" + response + "'");
                         isOpen = !(response.substring(13) == "closed");
-						Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
+						            Serial.println(String("status updated, the door is now ") + (isOpen ? "open" : "closed"));
                         if (isOpen) {
-							fill(0, 255, 0);
+							              fill(0, 255, 0);
                         } else {
                             fill(255, 0, 0);
                         }
@@ -205,7 +205,6 @@ void setup() {
 
 /// loop is called repeatedly while the chip is on.
 void loop() {
-<<<<<<< HEAD
     WiFiClient client = internalServer.available();
     if (client) {
         unsigned long now = millis();
@@ -217,7 +216,10 @@ void loop() {
             }
             if (client.available()) {
                 String requestPart = client.readStringUntil('\n');
-				if (requestPart.substring(0, 7) == "status=") {
+                
+                Serial.println(requestPart); // @DEBUG
+                
+				        if (requestPart.substring(0, 7) == "status=") {
                     client.println("HTTP/1.1 200 OK\r\n");
                     if (isOpen == (requestPart.substring(7, 13) == "closed")) {
                         isOpen = !isOpen;
@@ -240,7 +242,7 @@ void loop() {
                             delay(animationFrameDuration);
                         }
                     }
-					break;
+					          break;
                 } else if (requestPart.substring(0, 5) == "path=") {
                     String path = requestPart.substring(5);
                     Serial.println(String("will reboot using the firmware located at '") + path + "'");
